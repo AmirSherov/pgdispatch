@@ -52,15 +52,17 @@ def pytest_configure() -> None:
 def migrated() -> Iterator[None]:
     if not os.environ.get(DSN_ENV):
         pytest.skip(f"set {DSN_ENV} to run tests against PostgreSQL")
+    import psycopg
     from django.core.management import call_command
-    from django.db import NotSupportedError, connection
+    from django.db import connection
 
-    try:
-        connection.ensure_connection()
-    except NotSupportedError as exc:
-        # Recent Django releases drop old PostgreSQL versions; pgdispatch itself
-        # supports them, so only the Django tests are skipped.
-        pytest.skip(str(exc))
+    # Recent Django releases drop old PostgreSQL versions; pgdispatch itself
+    # supports them, so only the Django tests are skipped there.
+    with psycopg.connect(os.environ[DSN_ENV]) as raw:
+        server = int(raw.execute("SHOW server_version_num").fetchone()[0]) // 10000
+    required = connection.features.minimum_database_version[0]
+    if server < required:
+        pytest.skip(f"this Django release needs PostgreSQL {required}+, the server is {server}")
     call_command("migrate", "pgdispatch", verbosity=0)
     yield
     call_command("migrate", "pgdispatch", "zero", verbosity=0)
