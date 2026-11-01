@@ -1,0 +1,1 @@
+"""Outbound request safety."""

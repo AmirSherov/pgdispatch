@@ -1,0 +1,164 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pgdispatch"
+dynamic = ["version"]
+description = "Reliable webhook delivery for Python apps, using only the PostgreSQL you already have."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Amir Sherov", email = "sher4mir@gmail.com" }]
+requires-python = ">=3.10"
+keywords = [
+    "webhooks",
+    "postgresql",
+    "outbox",
+    "transactional-outbox",
+    "asyncpg",
+    "fastapi",
+    "django",
+    "sqlalchemy",
+    "standard-webhooks",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Framework :: Django",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "asyncpg>=0.29",
+    "aiohttp>=3.9",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "prometheus-client>=0.17",
+]
+
+[project.optional-dependencies]
+sqlalchemy = ["sqlalchemy[asyncio]>=2.0.20"]
+django = ["django>=4.2"]
+fastapi = ["fastapi>=0.110"]
+encryption = ["cryptography>=41"]
+
+[project.scripts]
+pgdispatch = "pgdispatch.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/AmirSherov/pgdispatch"
+Documentation = "https://github.com/AmirSherov/pgdispatch/tree/main/docs"
+Repository = "https://github.com/AmirSherov/pgdispatch"
+Issues = "https://github.com/AmirSherov/pgdispatch/issues"
+Changelog = "https://github.com/AmirSherov/pgdispatch/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "coverage[toml]>=7.4",
+    "cryptography>=41",
+    "django>=4.2",
+    "fastapi>=0.110",
+    "httpx>=0.27",
+    "hypothesis>=6.100",
+    "mypy>=1.10",
+    "psycopg[binary]>=3.1",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "sqlalchemy[asyncio]>=2.0.20",
+    "standardwebhooks>=1.0",
+    "django-stubs>=5.0",
+    "asyncpg-stubs>=0.29",
+]
+docs = ["mkdocs-material>=9.5"]
+
+[tool.hatch.version]
+path = "src/pgdispatch/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgdispatch"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/pgdispatch", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+
+# --- tooling -----------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "C4", "PIE", "PT", "RET", "TID",
+    "PL", "S", "N",
+]
+ignore = [
+    "PLR0913",  # public APIs intentionally take keyword arguments
+    "PLR2004",  # magic values are fine in comparisons with HTTP status codes
+    "S608",     # SQL is built from trusted constants, values are always bound parameters
+    "PLC0415",  # lazy imports keep optional dependencies optional
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S104", "S105", "S106", "PLR", "S311", "S603", "ASYNC", "PT011", "PT012", "PT018"]
+"examples/**" = ["S", "T20", "INP001", "PLW0603"]
+"benchmarks/**" = ["S", "T20", "INP001", "PLW0603", "ASYNC110"]
+"src/pgdispatch/django/migrations/**" = ["N999", "RUF012"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pgdispatch"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+files = ["src/pgdispatch"]
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["pgdispatch.django.*"]
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: long-running concurrency and chaos tests",
+]
+filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
+
+[tool.coverage.run]
+source = ["pgdispatch"]
+branch = true
+concurrency = ["thread", "multiprocessing"]
+parallel = true
+sigterm = true
+# Measure the worker processes started by the chaos tests too.
+patch = ["subprocess"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.$",
+]
