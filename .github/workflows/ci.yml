@@ -57,8 +57,13 @@ jobs:
         run: |
           uv run coverage run -m pytest
           uv run coverage combine
-          uv run coverage report --fail-under=90
+          uv run coverage report
           uv run coverage xml
+      # Django skips its tests on PostgreSQL versions it no longer supports,
+      # so the coverage threshold is enforced where the whole suite runs.
+      - name: Enforce coverage
+        if: matrix.postgres == '17'
+        run: uv run coverage report --fail-under=90 > /dev/null
       - uses: actions/upload-artifact@v4
         if: matrix.python == '3.13' && matrix.postgres == '17'
         with:
