@@ -1,0 +1,59 @@
+site_name: pgdispatch
+site_description: Reliable webhook delivery for Python apps, using only the PostgreSQL you already have.
+site_url: https://amirsherov.github.io/pgdispatch/
+repo_url: https://github.com/AmirSherov/pgdispatch
+repo_name: AmirSherov/pgdispatch
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Amir Sherov
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts: concepts.md
+  - Guides:
+      - Publishing events: publishing.md
+      - Managing endpoints: endpoints.md
+      - Receiving webhooks: receiving.md
+      - Running workers: workers.md
+  - Reference:
+      - Configuration: configuration.md
+      - Reliability and guarantees: guarantees.md
+      - Security: security.md
+      - Observability: observability.md
+      - Architecture: architecture.md
+  - Changelog: changelog.md
