@@ -20,7 +20,9 @@
     pip install pgdispatch
     ```
 
-You need Python 3.10 or newer and PostgreSQL 13 or newer. The optional
+You need Python 3.10 or newer and PostgreSQL 13 or newer. With Django, the
+PostgreSQL version must also be one your Django release supports (Django 5.x
+needs 14+, Django 6 needs 15+). The optional
 `encryption` extra adds encryption of signing secrets at rest
 (see [Security](security.md#signing-secrets)).
 

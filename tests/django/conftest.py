@@ -53,7 +53,14 @@ def migrated() -> Iterator[None]:
     if not os.environ.get(DSN_ENV):
         pytest.skip(f"set {DSN_ENV} to run tests against PostgreSQL")
     from django.core.management import call_command
+    from django.db import NotSupportedError, connection
 
+    try:
+        connection.ensure_connection()
+    except NotSupportedError as exc:
+        # Recent Django releases drop old PostgreSQL versions; pgdispatch itself
+        # supports them, so only the Django tests are skipped.
+        pytest.skip(str(exc))
     call_command("migrate", "pgdispatch", verbosity=0)
     yield
     call_command("migrate", "pgdispatch", "zero", verbosity=0)
