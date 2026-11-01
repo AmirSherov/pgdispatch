@@ -1,0 +1,5 @@
+# The Docker image installs pgdispatch from this repository first, so pip
+# treats the line below as already satisfied.
+pgdispatch[django]
+psycopg[binary]>=3.1
+gunicorn>=22.0

@@ -1,0 +1,143 @@
+# A complete pgdispatch demo: a FastAPI shop publishes order events, a separate
+# worker delivers them to a receiver that verifies the signatures, and
+# Prometheus and Grafana watch it all.
+#
+#   docker compose up --build
+#
+#   shop        http://localhost:8000/docs
+#   grafana     http://localhost:3000   (dashboard "pgdispatch")
+#   prometheus  http://localhost:9090
+#
+# Walkthrough: examples/fastapi_shop/README.md. The Django example runs with
+# `docker compose --profile django up --build`; see examples/django_shop/README.md.
+
+name: pgdispatch-demo
+
+# The shop and the worker share one image, built by the `shop` service.
+x-shop: &shop
+  image: pgdispatch-demo/fastapi-shop
+  environment: &shop-env
+    DATABASE_URL: postgresql+asyncpg://shop:shop@postgres:5432/shop
+    # The receiver is reached over plain HTTP on the private Docker network,
+    # which pgdispatch refuses by default. Never set these in production.
+    PGDISPATCH_ALLOW_HTTP: "true"
+    PGDISPATCH_ALLOW_PRIVATE_IPS: "true"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+# All Django services share one image, built by `django-migrate`.
+x-django: &django
+  profiles: [django]
+  image: pgdispatch-demo/django-shop
+  environment:
+    # Shares the database, and so the pgdispatch queue, with the FastAPI shop.
+    DATABASE_URL: postgresql://shop:shop@postgres:5432/shop
+    DJANGO_DEBUG: "true" # also allows the plain-HTTP, private-network receiver
+  depends_on:
+    django-migrate:
+      condition: service_completed_successfully
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # The FastAPI shop. It delivers no webhooks itself (RUN_WORKER=false):
+  # that is the job of the `worker` service below. For a single-process
+  # deployment, set RUN_WORKER=true and remove the worker service.
+  shop:
+    <<: *shop
+    build:
+      context: .
+      dockerfile: examples/fastapi_shop/Dockerfile
+    environment:
+      <<: *shop-env
+      RUN_WORKER: "false"
+    ports:
+      - "8000:8000"
+
+  # Standalone workers, scaled independently of the web application:
+  #   docker compose up -d --scale worker=3
+  worker:
+    <<: *shop
+    # `migrate` is safe to run concurrently with the shop's own start-up migration.
+    command: ["sh", "-c", "pgdispatch migrate && exec pgdispatch worker --metrics-port 9100"]
+    stop_grace_period: 30s # in-flight deliveries finish on SIGTERM
+
+  receiver:
+    build:
+      context: .
+      dockerfile: examples/receiver/Dockerfile
+    image: pgdispatch-demo/receiver
+    environment:
+      # The endpoint's signing secret; see the walkthrough. Put it in .env.
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      FAIL_RATE: ${FAIL_RATE:-0}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./contrib/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./contrib/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      # Demo only: everyone is an admin, no login.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/pgdispatch.json
+    volumes:
+      - ./contrib/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./contrib/grafana/dashboard.json:/var/lib/grafana/dashboards/pgdispatch.json:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # --- Django example (docker compose --profile django up --build) -----------
+
+  django-migrate:
+    <<: *django
+    build:
+      context: .
+      dockerfile: examples/django_shop/Dockerfile
+    command: ["python", "manage.py", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  django-shop:
+    <<: *django
+    ports:
+      - "8001:8000"
+
+  django-worker:
+    <<: *django
+    command: ["python", "manage.py", "pgdispatch_worker"]
+    stop_grace_period: 30s
+
+volumes:
+  postgres-data:

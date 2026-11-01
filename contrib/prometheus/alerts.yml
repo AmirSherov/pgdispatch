@@ -1,0 +1,77 @@
+# Alerting rules for pgdispatch.
+#
+# Every process that uses pgdispatch exports the queue gauges, but only
+# workers keep them up to date (processes that publish without delivering
+# report 0), so the rules aggregate them with max().
+groups:
+  - name: pgdispatch
+    rules:
+      - alert: PgDispatchDeliveryLagHigh
+        expr: max(pgdispatch_oldest_pending_age_seconds) > 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook deliveries are more than 5 minutes behind
+          description: >-
+            The most overdue delivery has been waiting for
+            {{ $value | humanizeDuration }}. Workers cannot keep up: add workers,
+            raise PGDISPATCH_CONCURRENCY, or check for slow endpoints.
+
+      - alert: PgDispatchHighFailureRatio
+        expr: |
+          sum(rate(pgdispatch_delivery_attempts_total{result!="success"}[10m]))
+            /
+          sum(rate(pgdispatch_delivery_attempts_total[10m]))
+            > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 20% of webhook delivery attempts fail
+          description: >-
+            {{ $value | humanizePercentage }} of the attempts in the last 10 minutes
+            failed. Run `pgdispatch deliveries --status failed --since 1h` to see which
+            endpoints are affected.
+
+      - alert: PgDispatchCircuitBreakersOpened
+        expr: |
+          max(pgdispatch_endpoints_circuit_open)
+            - max(pgdispatch_endpoints_circuit_open offset 15m)
+            > 0
+        labels:
+          severity: info
+        annotations:
+          summary: More endpoints have an open circuit breaker than 15 minutes ago
+          description: >-
+            {{ $value }} more endpoints stopped accepting webhooks. Their deliveries
+            are paused and retried automatically; `pgdispatch endpoints list` shows
+            which ones.
+
+      - alert: PgDispatchDeliveriesStalled
+        # Deliveries are due, yet nothing is sent: workers are alive (they keep the
+        # gauges up to date) but stuck. PgDispatchNoWorkers covers absent workers.
+        expr: |
+          max(pgdispatch_deliveries_pending) > 0
+            and max(pgdispatch_oldest_pending_age_seconds) > 60
+            and (sum(rate(pgdispatch_delivery_attempts_total[10m])) or vector(0)) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Webhook deliveries are pending but none are being sent
+          description: >-
+            Deliveries are waiting, but no delivery attempt was made in the last
+            10 minutes. Check that `pgdispatch worker` processes are running.
+
+      - alert: PgDispatchNoWorkers
+        # Adjust the job label to your scrape configuration.
+        expr: absent(up{job="pgdispatch-worker"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: No pgdispatch worker is being scraped
+          description: >-
+            Prometheus finds no running pgdispatch worker, so no webhooks are being
+            delivered and the queue metrics are stale.

@@ -1,0 +1,9 @@
+# The images only need the package sources and the examples.
+*
+!pyproject.toml
+!README.md
+!LICENSE
+!src/
+!examples/
+**/__pycache__
+**/.ruff_cache

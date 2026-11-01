@@ -1,0 +1,4 @@
+# The Docker image installs pgdispatch from this repository first, so pip
+# treats the line below as already satisfied.
+pgdispatch[sqlalchemy,fastapi]
+uvicorn[standard]>=0.30

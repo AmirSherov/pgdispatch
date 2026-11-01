@@ -1,0 +1,24 @@
+# Prometheus configuration for the docker-compose demo.
+global:
+  scrape_interval: 5s # short, so the demo dashboard reacts quickly
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # The web application: pgdispatch_events_published_total, plus every other
+  # pgdispatch metric when it runs the worker in-process (RUN_WORKER=true).
+  - job_name: pgdispatch-shop
+    metrics_path: /metrics/ # the mounted ASGI app serves it with a trailing slash
+    static_configs:
+      - targets: ["shop:8000"]
+
+  # Standalone workers (`pgdispatch worker --metrics-port 9100`). DNS discovery
+  # finds every replica after `docker compose up --scale worker=N`.
+  - job_name: pgdispatch-worker
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9100
+        refresh_interval: 10s
